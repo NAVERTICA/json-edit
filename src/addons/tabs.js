@@ -22,6 +22,7 @@
     formatHints.object = formatHints.object || {};
 
     formatHints.object.tabs = function (name, type, id, opts, required, priv, util) {
+        console.log("formatHints.object.tabs", name, type, id, opts, required, priv, util);
         var
             tabs, childs, order,
             classes = ["field", "object-fields"],
@@ -61,6 +62,27 @@
             };
         });
 
+        // JMT start
+        // possibility to add new tabs ?         
+        if (opts.additionalProperties) {
+            tabs.push(
+                {
+                    "li": {
+                        "$childs": [
+                            {
+                                "a": { "onclick": "javascript:var self=$(this);addSchemaTab(self,'" + name + "');return false;",
+                                "id": name + "addTab",
+                                "$childs": "(+)"
+                                }
+                            }
+                        ]
+                    }
+                });
+        }
+
+
+        // JMT end
+
         childs = [{"ul": {"$childs": tabs}}].concat(panels);
 
         if (required) {
@@ -91,7 +113,7 @@
     collectHints.object.tabs = function (key, field, schema, priv) {
         // if you change innerId format here change it in formatter above
         var
-            innerId = field.attr("id") + "-inner";
+            innerId = field.find("div[id$='-inner']").attr("id");
 
         return priv.collectObject(innerId, schema);
     };

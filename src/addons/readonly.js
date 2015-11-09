@@ -19,8 +19,8 @@
     var formatHints = JsonEdit.defaults.hintedFormatters,
         i, type, types = ["string", "number", "integer", "boolean"];
 
-    function readonly(name, type, id, opts, required, priv, util) {
-        var obj = priv.formatForType(name, type, id, opts, required, util);
+    function readonly(name, type, id, opts, required, priv, util, fromOneOf) {
+        var obj = priv.formatForType(name, type, id, opts, required, util, fromOneOf);
 
         obj.input.disabled = "disabled";
 

@@ -37,8 +37,7 @@
             checkId  = "check" + id,
             options = opts["je:optional"] || {},
             label = options.label || "Set",
-            defaultHasValue = opts["default"] !== null && opts["default"] !== undefined,
-            enabled =  defaultHasValue || options.enabled,
+            enabled = options.enabled,
             obj = priv.formatForType(name, type, id, opts, required, util);
 
         result = {

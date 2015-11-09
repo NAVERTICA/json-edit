@@ -114,6 +114,7 @@
         if (order) {
             return order;
         } else {
+			if (!obj) return [];
             return $.map(obj, function (value, key) {
                 return key;
             });
@@ -138,6 +139,7 @@
     };
 
     priv.genFields = function (order, schema, requiredFields, defaults, util) {
+        console.log("genFields", order, schema, requiredFields, defaults, util);
         order = priv.getKeys(schema, order);
 
         defaults = defaults || {};
@@ -260,6 +262,8 @@
     };
 
     priv.collectResult = function (ok, msg, data, isRoot) {
+        console.log("collectResult", ok, msg, data, isRoot);
+
         if (msg === undefined && ok) {
             msg = "ok";
         }
@@ -291,24 +295,26 @@
     };
 
     cons.defaults = defaults;
-    priv.collectObject = function (id, opts, order) {
+    priv.collectObject = function (id, opts) {
+        console.log("collectObject 1", id, opts);
         var
             // if can be already a jquery object if called from collectObject
             cont = (typeof id === "string") ? $("#" + id) : id,
+            order = priv.getKeys(opts.properties, opts.order),
             defaultVals = ifNotSet(opts["default"], {}),
             result = priv.collectResult(true), data = {},
             apropsSel, aprops;
 
-        order = order || priv.getKeys(opts.properties, opts.order);
-        $.each(order, function (i, key) {
+        console.log("collectObject 2", cont, cont.children(), order, defaultVals, result);
+
+        $.each(order, function (i, key) {            
             var
                 value, newSchema,
-
                 schema = opts.properties[key],
                 required = $.inArray(key, schema.required) !== -1,
                 selector = "." + priv.genFieldClasses(key, schema, ".", required),
                 field = cont.children(selector);
-
+            console.log("collectObject each - ", i, key, value, newSchema, schema, required, selector, field);
             if (field.size() !== 1) {
                 defaults.displayWarning("expected one item collecting",
                     field.size(), key, selector, cont, field);
@@ -343,18 +349,18 @@
         });
 
         if (opts.additionalProperties) {
-            apropsSel = ns.$cls("object-additional-fields") + ">" +
+            apropsSel = ">"+ ns.$cls("object-additional-fields") + ">" + //look only for direct children
                 ns.$cls("additional-properties") + ">" +
                 ns.$cls("additional-property");
-
             aprops = cont.find(apropsSel);
 
             aprops.each(function (i, prop) {
                 var
                     $prop = $(prop),
                     name = $.trim($prop.children(ns.$cls("additional-propname")).val()),
-                    $value = $prop.children(ns.$cls("additional-propvalue")),
-                    value = priv.collectField(name, $value, opts.additionalProperties);
+                    $value = $prop.children(ns.$cls("additional-propvalue"));
+					if (!name) return;
+					var value = priv.collectField(name, $value, opts.additionalProperties);
 
                 // TODO: check for duplicated names and for invalid inputs
                 data[name] = value.data;
@@ -365,6 +371,7 @@
     };
 
     priv.collectField = function (key, field, schema, ignoreHint) {
+        console.log("collectField", key, field, schema, ignoreHint);
         var hint = schema['je:hint'], hints = defaults.hintedCollectors,
             type = ifNotSet(schema.type, getType(schema));
 
@@ -388,6 +395,7 @@
         var obj = {
             "label": {
                 "for": idFor,
+				"title":title,
                 "$childs": label
             }
         };
@@ -459,18 +467,13 @@
                 "id": id + "-div",
                 "class": ns.cls("array-item"),
                 "$childs": [
-                    {
-                        "div": {
-                            "class": ns.cls("array-item-wrapper"),
-                            "$childs": [input]
-                        }
-                    },
+                    input,
                     {
                         "div": {
                             "class": ns.cls("array-item-actions"),
                             "$childs": [
                                 makeLinkAction(
-                                    "X",
+                                    "remove",
                                     onRemoveClick,
                                     {"class": ns.cls("action")})
                             ]
@@ -480,37 +483,57 @@
             }
         };
 
+        console.log("make array items", cont);
         return cont;
     }
 
+	
+	function oneOfSelectOnChange(thisSelect, opts, id, i, name, util){
+		var parentCont = $(thisSelect).parent();
+		$(thisSelect).remove();
+		//save selected type and schema inside parent container
+		parentCont[0].selectedType = opts.type || "object";
+		parentCont[0].selectedSchema = JSON.stringify(opts) || "";
+		
+		var lego = priv.input(name, ifNotSet(opts.type, "object"), id, opts, true, util);
+		parentCont.append($.lego(lego));
+		util.events.rendered.fire(parentCont, id, opts);
+	}
     function onAddItemClick(opts, id, i, name, util) {
-        var
-            items = $("#" + id + " " + ns.$cls("array-items")),
-            item = makeArrayItem(
-                opts,
-                name,
-                opts.items.type || getType(opts.items),
-                id + "-" + i,
-                opts.items,
-                util);
 
-        if (opts.maxItems && items.children().size() >= opts.maxItems) {
-            defaults.displayError(defaults.msgs.cantAddMaxItems);
-        } else {
-            items.append($.lego(item));
-        }
-        util.events.rendered.fire();
+			var
+				items = $("#" + id + " > " + ns.$cls("array-items")),
+				item = makeArrayItem(
+
+
+					opts,
+					name,
+					opts.items.type || getType(opts.items),
+
+					id + "-" + i,
+					opts.items,
+
+					util);
+
+			if (opts.maxItems && items.children().size() >= opts.maxItems) {
+				defaults.displayError(defaults.msgs.cantAddMaxItems);
+
+			} else {
+				items.append($.lego(item));
+
+			}
+			util.events.rendered.fire();
     }
 
     function onClearItemsClick(opts, id) {
         var realMinItems = ifNotSet(opts.minItems, 0),
-            selectorItems = "#" + id + " " + ns.$cls("array-items"),
+            selectorItems = "#" + id + " > " + ns.$cls("array-items"),
             selectorChildsToRemove = ":not(:lt(" + realMinItems + "))";
 
         $(selectorItems).children(selectorChildsToRemove).remove();
     }
 
-    priv.genAdditionalProperties = function (objId, schema, util) {
+    priv.genAdditionalProperties = function (objId, schema, util, defaults) {
         var
             id = objId + "-additional",
             contCls = ns.cls("additional-properties"),
@@ -518,20 +541,32 @@
             propCls = ns.classes(["field", type, "additional-property"]),
             childs = [];
 
-
+		function onAdditionalRemoveClick(){
+			$(this).parent("div").remove();
+		}
+		
         function onAddClick() {
+			
+			//empty defaults
+			schema.default = {};
             var
                 selector = "#" + id + ">." + contCls,
                 props = $(selector),
                 input = priv.input("additionalproperty", type, ns.id(id, true), schema, true, util),
                 inputBody = firstProp(input);
-
             inputBody["class"] = ifNotSet(inputBody["class"], "") + " " + ns.cls("additional-propvalue");
-
             props.append($.lego({
                 "div": {
                     "class": propCls,
                     "$childs": [
+						{
+							"a":{
+								"$childs":"remove",
+								"$click":onAdditionalRemoveClick,
+								"class":"je-array-item-actions",
+								"href":"#"
+							}
+						},
                         {
                             "input": {
                                 "type": "text",
@@ -543,7 +578,8 @@
                 }
             }));
 
-            util.events.rendered.fire();
+            util.events.rendered.fire(selector);
+			return false;
         }
 
         childs.push({
@@ -557,21 +593,76 @@
                 }
             }
         });
+		/**start*/	//generate saved additionalProperties
+		var childsChildren = "";
+		if(!$.isEmptyObject(defaults)){
+		childsChildren = [];
+			var defaultsArr = [];
+			for(var key in defaults){
+				var tmp = JSON.parse('{"'+key+'":""}');
+				tmp[key] = defaults[key];
+				defaultsArr.push(tmp);
+			}
+			$(defaultsArr).each(function(){
+			var defInputValue = "";
+				// if(typeof(schema["je:hint"]) != "string" && schema.type == "string"){
+					var defValue;
+					for(var k in this){
+						defValue = this[k];
+						defInputValue = k;
+					}
+					schema = $.extend({}, schema, {"default": defValue});
+				// }else{
+					// schema = $.extend({}, schema, {"default": this});
+				// }
+				var input = priv.input("additionalproperty", schema.type, ns.id(id, true), schema, true, util);
+				var	propCls = ns.classes(["field", schema.type, "additional-property"]);
+				var inputBody = firstProp(input);
 
+				inputBody["class"] = ifNotSet(inputBody["class"], "") + " " + ns.cls("additional-propvalue");
+				
+				childsChildren.push(
+					$.lego({
+						"div": {
+							"class": propCls,
+							"$childs": [
+								{
+									"a":{
+										"$childs":"remove",
+										"$click":onAdditionalRemoveClick,
+										"class":"je-array-item-actions",
+										"href":"#"
+									}
+								},
+								{
+									"input": {
+										"value":defInputValue,
+										"type": "text",
+										"class": ns.cls("additional-propname")
+									}
+								},
+								input
+							]
+						}
+					}));
+			});
+		}
+		/**end*/
         childs.push({
             "div": {
                 "class": contCls,
-                "$childs": ""
+                "$childs": childsChildren
             }
         });
-
-        return {
+        var result = {
             "div": {
                 "id": id,
                 "class": ns.classes(["field", "object-additional-fields"]),
                 "$childs": childs
             }
         };
+        console.log("genAdditionalProperties", result);
+        return result;
     };
 
     defaults.formatters.object = function (name, type, id, opts, required, util) {
@@ -587,6 +678,7 @@
         childs = priv.genFields(opts.order, opts.properties, opts.required,
                                 defaults, util);
 
+						
         if (opts.description) {
             childs.unshift({
                 "legend" : {
@@ -594,18 +686,21 @@
                 }
             });
         }
+		
         if (opts.additionalProperties) {
-            childs.push(priv.genAdditionalProperties(id, opts.additionalProperties,
-                                                     util));
+            childs.push(priv.genAdditionalProperties(id, opts.additionalProperties, util, defaults));
+
         }
 
-        return {
+        var result = {
             "div": {
                 "id": id,
                 "class": ns.classes(classes),
                 "$childs": childs
             }
         };
+        console.log("defaults.formatters.object", result);
+        return result;
     };
 
     defaults.formatters.array = function (name, type, id, opts, required, util) {
@@ -646,7 +741,7 @@
 
             // if there are more default values than minItems then use that size to
             // initialize the items
-            if (defaultValues.length > minItems) {
+            if (defaultValues && defaultValues.length > minItems) {
                 minItems = defaultValues.length;
             }
 
@@ -668,7 +763,7 @@
                 arrayChilds.push(arrayChild);
             }
 
-            return {
+            var result = {
                 "div": {
                     "id": id,
                     "class": priv.genFieldClasses(name, opts, " ", required),
@@ -683,11 +778,11 @@
                             "div": {
                                 "class": ns.cls("array-actions"),
                                 "$childs": [
-                                    makeButton("Add", function () {
+                                    makeButton("add", function () {
                                         i += 1;
                                         onAddItemClick(opts, id, i, name, util);
                                     }),
-                                    makeButton("Clear", function () {
+                                    makeButton("clear", function () {
                                         onClearItemsClick(opts, id);
                                     })
                                 ]
@@ -696,6 +791,8 @@
                     ]
                 }
             };
+            console.log("defaults.formatters.array", result);
+            return result;
         }
     };
 
@@ -737,11 +834,90 @@
         if (opts.description) {
             obj.select.title = opts.description;
         }
-
+		
         return obj;
     };
 
 
+	defaults.formatters.oneOf = function(name, type, id, opts, required, util){
+		var defaultes = opts["default"] || {};
+		if(!$.isEmptyObject(defaultes)){
+			var matchingSchema;
+			var defKeys = [];
+			//Try to find matching schema in definitions
+			for(var key in opts.definitions){
+				if(priv.validateJson(name,opts.default,opts.definitions[key]).ok){
+					defKeys.push(key);
+					matchingSchema = opts.definitions[key];
+				}
+			}
+			if(!matchingSchema){
+				console.log("No matching Schema found for saved value, ...creating default...");
+			}else{
+				/**confirm definition prompt**/
+				if(defKeys.length > 1){
+					var userValidatedKey = window.prompt("Choose correct definition for this Default: \n	"+opts.default+"\nOptions are: \n	"+defKeys.join("\n	"),defKeys[defKeys.length-1])
+					if(userValidatedKey != null){
+						matchingSchema = opts.definitions[userValidatedKey];
+					}
+				}
+				/****/
+				matchingSchema = $.extend({}, matchingSchema, {"default": opts.default});
+				if(matchingSchema["je:hint"] != undefined){
+					return defaults.hintedFormatters[matchingSchema.type][matchingSchema["je:hint"]](name, matchingSchema.type, id, matchingSchema, required, priv, util, true);
+				}else{
+					return priv.formatForType(name, matchingSchema.type, id, matchingSchema, required, util, true);
+				}
+			}
+		}
+		if(!opts.default || !matchingSchema){
+			jsonRefs.resolveRefs(opts, {}, function (err, rJson, metadata) {opts=metadata;});
+			var childs = [];
+			//empty informative option
+			var op = {"option":
+				{
+					"id":id+'-msg',
+					"text":"Select One",
+					"value":"",
+					"$childs":"Select One",
+					"selected":true
+				}
+			};
+			childs.push(op);
+			$.map(opts, function(item, index){
+				var opt = {
+					"option":{
+						"id":id+'-'+index,
+						"text":item.ref.split('/').pop(),
+						"value":JSON.stringify(item.value),
+						"$childs":item.ref.split('/').pop()
+					}
+				};
+				childs.push(opt);
+				//return opt;
+			});
+			//
+			var obj = {
+				"select": {
+						"id": id,
+						"name": name,
+						"$childs": childs,
+						"$change":
+							function(e){
+								console.log("selectChange");
+								if(navigator.userAgent.indexOf("MSIE") != -1){
+									oneOfSelectOnChange(this, JSON.parse(this[this.selectedIndex].value), id, this[this.selectedIndex].id.split('-').pop(), this[this.selectedIndex].text, util);
+								}else{
+									oneOfSelectOnChange(this, JSON.parse(this.selectedOptions[0].value), id, this.selectedOptions[0].id.split('-').pop(), this.selectedOptions[0].text, util);
+								}
+							}
+				}
+			};
+			
+			return obj;
+		}
+	};
+	
     defaults.formatters.default_ = function (name, type, id, opts, required, util) {
 
         if (opts["enum"]) {
@@ -808,7 +984,7 @@
         if (opts.pattern) {
             obj.input.pattern = opts.pattern;
         }
-
+		
         return obj;
     };
 
@@ -818,13 +994,18 @@
         var children = field.children(ns.$cls("object-fields"));
         if (children.size() > 0) {
             return priv.collectObject(children, schema);
-        } else {
-            return priv.collectObject(field.children(".je-root"), schema);
+        }
+		else if(field.children(".je-root").size() > 0){
+			return priv.collectObject(field.children(".je-root"), schema);
+		}
+		else {
+            return priv.collectObject(field, schema);
         }
     };
 
     defaults.collectors.array = function (name, field, schema) {
-        var result, arrayResult, castResult, itemSelector,
+        var
+            result, arrayResult, castResult,
 
             defaults = schema["default"] || [],
             itemSchema = schema.items || {},
@@ -833,7 +1014,7 @@
             ok = true,
             msg = "ok",
             data = [];
-
+        console.log("defaults.collectors.array", name, field, schema);
         if (schema.items && schema.items["enum"]) {
             data = field
                 .find("option:selected")
@@ -856,10 +1037,11 @@
             }
 
         } else {
-            // relies on .array-item being the *great-grandchild* of the current field
-            itemSelector = "> * > * > " + ns.$cls("array-item") + " > " + 
-                ns.$cls("array-item-wrapper");
-            field.find(itemSelector).each(function (i, node) {
+			var fieldsFind = field.find("> * > * > " + ns.$cls("array-item"));
+			if(fieldsFind.length == 0) fieldsFind = field.find("> * > " + ns.$cls("array-item"));
+			if(fieldsFind.length == 0) {fieldsFind = $(field.children()[1]); itemSchema = schema;}
+            // relies on .array-item being the *great-grandchild* of the current field //UPDATE: not any more
+            fieldsFind.each(function (i, node) {
                 var newSchema, itemResult;
 
                 // if the array above has a default then override the item
@@ -953,6 +1135,35 @@
         return {result: priv.validateJson(name, value, schema), data: value};
     };
 
+	defaults.collectors.oneOf = function(name, field, schema) {
+	var selType = field[0].selectedType ? field[0].selectedType : field.children("div").children().children("div.je-array-item")[0].selectedType;
+	var selSchema = field[0].selectedSchema ? field[0].selectedSchema : field.children("div").children().children("div.je-array-item")[0].selectedSchema;
+	
+		if (selType && defaults.collectors[selType]) {
+			if(selSchema){
+				var newSchema = JSON.parse(selSchema);
+				schema = newSchema;
+			}
+			if(newSchema["je:hint"] != undefined){
+				return defaults.hintedCollectors[selType][newSchema["je:hint"]](name, field, schema);
+			}else{
+				return defaults.collectors[selType](name, field, schema);
+			}
+        }
+		else if(selType && selSchema){
+			var newSchema = JSON.parse(selSchema);
+			schema = newSchema;
+			if(newSchema["je:hint"] != undefined && typeof(defaults.hintedCollectors[selType][newSchema["je:hint"]]) == 'function'){
+				return defaults.hintedCollectors[selType][newSchema["je:hint"]](name, field, schema);
+			}else{
+				return defaults.collectors.default_(name, field, schema);
+			}
+		}
+		else {
+            return defaults.collectors.default_(name, field, schema);
+        }
+	};
+	
     priv.collectChildTag = function (selector, name, field, schema) {
         if (schema["enum"]) {
             return defaults.collectors.enum_(name, field, schema);
@@ -1024,7 +1235,19 @@
     };
 
     // format the given field according to its type without resolving hints
-    priv.formatForType = function (name, type, id, opts, required, util) {
+    priv.formatForType = function (name, type, id, opts, required, util, fromOneOf) {
+		if(fromOneOf == true){
+			util.events.rendered.handleOnce(function (selector) {
+				if($(".je-array-item[id*='"+id+"']").length == 0){
+					$("#"+id).parent()[0].selectedType = opts.type || "object";
+					$("#"+id).parent()[0].selectedSchema = JSON.stringify(opts) || "";
+				}
+				else{
+					$(".je-array-item[id*='"+id+"']")[0].selectedType = opts.type || "object";
+					$(".je-array-item[id*='"+id+"']")[0].selectedSchema = JSON.stringify(opts) || "";
+				}
+			});
+		}
         if (defaults.formatters[type]) {
             return defaults.formatters[type](name, type, id, opts, required, util);
         } else {
@@ -1033,6 +1256,11 @@
     };
 
     priv.input = function (name, type, id, opts, required, util) {
+	//during first call save complete schema in priv.completeSchema for possible future use
+	if(!priv.completeSchema){
+		priv.completeSchema = opts;
+	}
+        console.log("priv.input", name, type, id, opts, required, util);
         opts = opts || {};
         var hint = opts['je:hint'], hints = defaults.hintedFormatters;
 
@@ -1046,10 +1274,17 @@
     // return a list of classes for this field separated by sep (" " if not
     // provided)
     priv.genFieldClasses = function (fid, opts, sep, required) {
+        console.log("genFieldClasses", fid, opts, sep, required);
         var
             type = opts.type || getType(opts),
             classes = ["field", fid, type];
-
+		
+		if (opts.classes){
+			$(opts.classes.split(",")).each(function(i,el){
+				classes.push(el.trim());
+			});
+		}
+		
         if (required) {
             classes.push("required");
         }
@@ -1085,7 +1320,7 @@
             labelText = ifNotSet(opts.title, fid),
             labelTitle = opts.type === 'array' ? opts.description : undefined,
             label = priv.label(labelText, inputId, labelTitle);
-
+        
         if (false && opts.type === 'boolean') {
             label.label.$childs = [input, label.label.$childs];
             label.label["class"] = "checkbox";
@@ -1116,7 +1351,7 @@
 
             result.div.style = "display: none";
         }
-
+        console.log("genField", fid, opts, required, util, id, inputId, type, input, result);
         return result;
     };
 
@@ -1161,17 +1396,14 @@
             .appendTo(head);
     };
 
-    priv.loadJs = function (path, id) {
-        var script = document.createElement("script");
-
-        script.type = "text/javascript";
-        script.src = path;
+    priv.loadJs = function (path, id) {        
+        var script = $("<script type='text/javascript' src='" + path + "'></script>");
 
         if (id) {
-            script.id = id;
+            $(script).attr("id", id);
         }
 
-        $("head").append(script);
+        $("body").append(script);
     };
 
     if (jopts.exportPrivates) {
