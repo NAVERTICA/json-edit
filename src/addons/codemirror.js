@@ -29,7 +29,7 @@
         }
         return true;
     }
-
+	
     formatHints.string = formatHints.string || {};
 
     formatHints.string.codemirror = function (name, type, id, opts, required, priv, util) {
@@ -49,44 +49,36 @@
         }
 
         loadCssFromCache = load(priv.loadCss, path + "lib/codemirror.css", "codemirror-style");
-        load(priv.loadJs, path + "lib/codemirror.js");
-
-        if (options.mode) {
-            load(priv.loadJs, path + "mode/" + options.mode);
-        }
-
-        scripts.forEach(function (script) {
-            load(priv.loadJs, path + "/" + script);
-        });
-
-        addons.forEach(function (addon) {
-            load(priv.loadJs, path + "addon/" + addon);
-        });
-
-        styles.forEach(function (stylePath) {
+		styles.forEach(function (stylePath) {
             load(priv.loadCss, path + "/" + stylePath);
         });
+		
+		var requireArr = ["codemirror/lib/codemirror"];
+		
+		if (options.mode) {
+			requireArr.push("codemirror/mode/" + options.mode);
+		}
 
-        util.events.rendered.handleOnce(function () {
-            if (options.lintWith) {
-                init.lintWith = CodeMirror[options.lintWith];
-            }
+		scripts.forEach(function (script) {
+			requireArr.push("codemirror/" + script);
+		});
 
-            function render() {
-                var textarea = document.getElementById(codeId),
-                editor = CodeMirror.fromTextArea(textarea, init);
+		addons.forEach(function (addon) {
+			requireArr.push("codemirror/addon/" + addon);
+		});
+		
+		util.events.rendered.handleOnce(function () {
+			require(requireArr,function(CodeMirror){
+				if (options.lintWith) {
+					init.lintWith = CodeMirror[options.lintWith];
+				}
+				var textarea = document.getElementById(codeId),
+				editor = CodeMirror.fromTextArea(textarea, init);
 
-                $("#" + codeId).data("codemirror", editor);
-            }
-
-            if (loadCssFromCache) {
-                render();
-            } else {
-                // In Chrome the codemirror is rendered before the css was loaded
-                setTimeout(render, 2000);
-            }
-        });
-
+				$("#" + codeId).data("codemirror", editor);
+			});
+		});
+		
         return {
             "textarea": {
                 "id": codeId,
