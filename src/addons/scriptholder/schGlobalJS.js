@@ -5,17 +5,19 @@ window.schGlobal = (function () {
     var _executor = new SP.RequestExecutor(_host + "/");
 	
 	var showLoading = function() {
+		/***
 		if(schGlobal.loadingInProgress) return false;
 		schGlobal.loadingInProgress = true;
 		var options = {};
 		options.title = "Loading . . .";
 		options.width = 350;
 		options.height = 208;
-		options.url = "/_layouts/15/SPTools2013/libs/json-edit/src/addons/scriptholder/load.gif";
+		options.url = "/_layouts/15/NVR.SPTools/libs/json-edit/src/addons/scriptholder/load.gif";
 		options.showClose = false;
 		
 		SP.UI.ModalDialog.showModalDialog(options);
-        //SP.UI.ModalDialog.showWaitScreenWithNoClose('', '', 75, 45);
+		/***/
+        SP.UI.ModalDialog.showWaitScreenWithNoClose('', '', 75, 45);
     };
     var closeLoading = function() {
 		if(schGlobal.loadingInProgress) schGlobal.loadingInProgress = false;
@@ -445,9 +447,11 @@ var schList = (function (schGlobal) {
 						appendOption(options[i], tempOptGroupId);
 					}
 					if(defaults == ""){
-						
-						$('#'+id+' select').multiselect('refresh');
-						
+						try{
+							$('#'+id+' select').multiselect('refresh');
+						}catch(err){
+							console.log(err);
+						}
 						//fire onchange on self
 						$('#'+id+' select')[0].onchange();
 						
@@ -641,7 +645,11 @@ var schField = (function (schGlobal) {
 				if($('#'+id+' optgroup[id="'+this.label+'"] option[value="'+this.value+'"]').length > 1){$(this).remove();}
 			});
 			if(defaults == ""){
-				$('#'+id+' select').multiselect('refresh');
+				try{
+					$('#'+id+' select').multiselect('refresh');
+				}catch(err){
+					console.log(err);
+				}
 			}else{
 				/**Lookup**/
 				if(typeof(defaults)=="string") defaults = [defaults];
@@ -1548,7 +1556,11 @@ var schRoles = (function (schGlobal) {
 			});
 			
 			if(defaults == ""){
-				$('#'+id+' select').multiselect('refresh');
+				try{
+					$('#'+id+' select').multiselect('refresh');
+				}catch(err){
+					console.log(err);
+				}
 			}else{
 				if(typeof(defaults)=="string") defaults = [defaults];
 				$(defaults).each(function(){
